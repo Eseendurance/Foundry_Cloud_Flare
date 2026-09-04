@@ -116,11 +116,8 @@ export default function Build() {
     <div className="flex min-h-screen flex-col bg-paper">
       <header className="border-b border-line">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link
-            className="flex items-center gap-2 text-sm text-ink-soft hover:text-ink"
-            href="/dashboard"
-          >
-            <ArrowLeft size={16} />
+          <Link className="flex items-center gap-2 text-sm text-ink-soft hover:text-ink" href="/dashboard">
+            <ArrowLeft size="{16}"/>
             Workspace
           </Link>
           <span className="inline-flex items-center gap-2 rounded-full border border-moss/30 bg-moss/5 px-3 py-1 text-xs text-moss">
@@ -135,8 +132,7 @@ export default function Build() {
           Describe it. Watch it get built.
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-ink-soft">
-          This generates a real, self-contained app — one file, running Claude,
-          Gemini, DeepSeek, Groq, or OpenRouter live.
+          This generates a real, self-contained app — one file, running Claude, Gemini, DeepSeek, Groq, or OpenRouter live.
         </p>
 
         <form onSubmit={generate} className="mt-6">
@@ -152,7 +148,7 @@ export default function Build() {
               disabled={loading || !prompt.trim()}
               className="flex shrink-0 items-center justify-center gap-2 rounded-full bg-moss px-6 py-3.5 text-sm font-medium text-paper transition-colors hover:bg-moss-deep disabled:opacity-50"
             >
-              <Sparkles size={16} />
+              <Sparkles size="{16}"/>
               {loading ? "Building…" : "Build it"}
             </button>
           </div>
@@ -172,7 +168,7 @@ export default function Build() {
 
         {error && (
           <div className="mt-6 flex items-start gap-2 rounded-2xl border border-rust/30 bg-rust/5 p-4 text-sm text-rust">
-            <AlertCircle className="mt-0.5 shrink-0" size={18} />
+            <AlertCircle className="mt-0.5 shrink-0" size="{18}"/>
             {error}
           </div>
         )}
@@ -202,7 +198,7 @@ export default function Build() {
                       : "text-ink-soft hover:text-ink"
                   }`}
                 >
-                  <Play size={12} />
+                  <Play size="{12}"/>
                   Preview
                 </button>
               </div>
@@ -220,7 +216,7 @@ export default function Build() {
                       onClick={openInIde}
                       className="flex items-center gap-1.5 text-xs text-ink-soft hover:text-ink"
                     >
-                      <Code2 size={14} />
+                      <Code2 size="{14}"/>
                       Open in IDE
                     </button>
                     <button
@@ -228,7 +224,7 @@ export default function Build() {
                       onClick={copyCode}
                       className="flex items-center gap-1.5 text-xs text-ink-soft hover:text-ink"
                     >
-                      {copied ? <Check size={14} /> : <Copy size={14} />}
+                      {copied ? <Check size="{14}"/> : <Copy size="{14}"/>}
                       {copied ? "Copied" : "Copy"}
                     </button>
                     <button
@@ -236,7 +232,7 @@ export default function Build() {
                       onClick={downloadCode}
                       className="flex items-center gap-1.5 text-xs text-ink-soft hover:text-ink"
                     >
-                      <Download size={14} />
+                      <Download size="{14}"/>
                       Download
                     </button>
                   </div>
@@ -251,10 +247,10 @@ export default function Build() {
                 </pre>
               ) : (
                 <div className="h-[550px] w-full">
-                  <Preview code={code} />
+                  <Preview code="{code}"/>
                 </div>
               )}
-            </div> 
+            </div>
           </div>
         )}
       </main>

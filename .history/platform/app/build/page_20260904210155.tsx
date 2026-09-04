@@ -254,7 +254,7 @@ export default function Build() {
                   <Preview code={code} />
                 </div>
               )}
-            </div> 
+            </div>
           </div>
         )}
       </main>
