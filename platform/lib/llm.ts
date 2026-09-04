@@ -14,7 +14,6 @@ interface OpenAiStyleResponse {
   };
 }
 
-// Helper function to prevent preview breaking due to markdown wrappers
 function cleanOutput(rawText: string): string {
   let cleaned = rawText.trim();
   if (cleaned.startsWith("```html")) {
@@ -43,7 +42,7 @@ export async function callGroq(
         { role: "system", content: system },
         { role: "user", content: prompt },
       ],
-      max_tokens: Math.min(maxTokens, 4096), // Groq enforces max 4096 output tokens
+      max_tokens: Math.min(maxTokens, 4096),
       temperature: 0.2,
     }),
   });
@@ -53,14 +52,10 @@ export async function callGroq(
   try {
     data = JSON.parse(raw);
   } catch {
-    throw new Error(
-      `Groq ${res.status}: ${raw.slice(0, 200) || "empty response"}`
-    );
+    throw new Error(`Groq ${res.status}: ${raw.slice(0, 200) || "empty response"}`);
   }
   if (!res.ok) {
-    throw new Error(
-      `Groq ${res.status}: ${data.error?.message || "request failed"}`
-    );
+    throw new Error(`Groq ${res.status}: ${data.error?.message || "request failed"}`);
   }
 
   const text = data.choices?.[0]?.message?.content || "";
@@ -72,8 +67,7 @@ export async function callOpenRouter(
   prompt: string,
   maxTokens: number
 ): Promise<LlmResult> {
-  const model =
-    process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free";
+  const model = process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free";
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -97,14 +91,10 @@ export async function callOpenRouter(
   try {
     data = JSON.parse(raw);
   } catch {
-    throw new Error(
-      `OpenRouter ${res.status}: ${raw.slice(0, 200) || "empty response"}`
-    );
+    throw new Error(`OpenRouter ${res.status}: ${raw.slice(0, 200) || "empty response"}`);
   }
   if (!res.ok) {
-    throw new Error(
-      `OpenRouter ${res.status}: ${data.error?.message || "request failed"}`
-    );
+    throw new Error(`OpenRouter ${res.status}: ${data.error?.message || "request failed"}`);
   }
 
   const text = data.choices?.[0]?.message?.content || "";
@@ -139,9 +129,7 @@ export async function generateText(
       if (provider === "groq") return await callGroq(system, prompt, maxTokens);
       if (provider === "openrouter") return await callOpenRouter(system, prompt, maxTokens);
     } catch (err) {
-      errors.push(
-        `${provider}: ${err instanceof Error ? err.message : String(err)}`
-      );
+      errors.push(`${provider}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
