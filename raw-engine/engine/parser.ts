@@ -1,4 +1,4 @@
-import { ASTProgram, EndpointNode, PipelineNode } from "./ast";
+import { ASTProgram, EndpointNode, PipelineNode, TransformRuleNode, ConditionNode, WebhookNode } from "./ast";
 
 export function parsePipeDSL(source: string): ASTProgram {
   const ast: ASTProgram = {
@@ -8,13 +8,17 @@ export function parsePipeDSL(source: string): ASTProgram {
 
   const lines = source.split("\n");
   let currentPipeline: PipelineNode | null = null;
-  let inTransformBlock = false;
+  let currentCondition: ConditionNode | null = null;
+  
+  // States: "NONE" | "TRANSFORM" | "IF" | "ELSE"
+  let blockState: "NONE" | "TRANSFORM" | "IF" | "ELSE" = "NONE";
 
-  for (let line of lines) {
-    line = line.trim();
+  for (let rawLine of lines) {
+    const line = rawLine.trim();
 
     if (!line || line.startsWith("//") || line.startsWith("#")) continue;
 
+    // 1. Endpoint declaration
     if (line.startsWith("endpoint")) {
       const match = line.match(/endpoint\s+(GET|POST|PUT|DELETE)\s+"([^"]+)"/i);
       if (match) {
@@ -28,6 +32,7 @@ export function parsePipeDSL(source: string): ASTProgram {
       continue;
     }
 
+    // 2. Pipeline declaration
     if (line.startsWith("pipeline")) {
       const match = line.match(/pipeline\s+"([^"]+)"/);
       if (match) {
@@ -36,38 +41,85 @@ export function parsePipeDSL(source: string): ASTProgram {
           name: match[1],
           transforms: [],
           conditions: [],
+          webhooks: [],
         };
         ast.pipelines.push(currentPipeline);
       }
       continue;
     }
 
+    // 3. Webhook definition
+    if (line.startsWith("webhook")) {
+      const match = line.match(/webhook\s+"([^"]+)"/);
+      if (match && currentPipeline) {
+        currentPipeline.webhooks.push({
+          type: "WebhookNode",
+          url: match[1],
+          method: "POST",
+        });
+      }
+      continue;
+    }
+
+    // 4. Block entries
     if (line.startsWith("transform {")) {
-      inTransformBlock = true;
+      blockState = "TRANSFORM";
       continue;
     }
 
-    if (line === "}" && inTransformBlock) {
-      inTransformBlock = false;
+    if (line.startsWith("if ") && line.endsWith("{")) {
+      const match = line.match(/^if\s+(.+)\s+\{$/);
+      if (match && currentPipeline) {
+        currentCondition = {
+          type: "ConditionNode",
+          condition: match[1].trim(),
+          thenBranch: [],
+          elseBranch: [],
+        };
+        currentPipeline.conditions.push(currentCondition);
+        blockState = "IF";
+      }
       continue;
     }
 
-    if (inTransformBlock && currentPipeline && line.includes("=")) {
+    if (line.startsWith("else {")) {
+      blockState = "ELSE";
+      continue;
+    }
+
+    // Block exit
+    if (line === "}") {
+      if (blockState === "ELSE") {
+        currentCondition = null;
+      }
+      blockState = "NONE";
+      continue;
+    }
+
+    // 5. Parse field assignments inside blocks
+    if (line.includes("=")) {
       const parts = line.split("=");
       const targetField = parts[0].trim();
       const expression = parts.slice(1).join("=").trim().replace(/;$/, "");
 
-      currentPipeline.transforms.push({
+      const rule: TransformRuleNode = {
         type: "TransformRuleNode",
         targetField,
         expression,
-      });
+      };
+
+      if (blockState === "TRANSFORM" && currentPipeline) {
+        currentPipeline.transforms.push(rule);
+      } else if (blockState === "IF" && currentCondition) {
+        currentCondition.thenBranch.push(rule);
+      } else if (blockState === "ELSE" && currentCondition) {
+        currentCondition.elseBranch?.push(rule);
+      }
     }
   }
 
   return ast;
 }
 
-// Alias parse for backward compatibility with bin/engine.ts
 export const parse = parsePipeDSL;
 export default parsePipeDSL;

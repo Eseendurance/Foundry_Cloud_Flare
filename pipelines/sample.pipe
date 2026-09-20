@@ -10,4 +10,16 @@ pipeline "sample.pipe" {
     user_role = lowercase(role)
     system_origin = "raw_engine_gateway"
   }
+
+  if role == "ADMIN" {
+    priority = "high"
+    access_level = "full_access"
+  }
+
+  else {
+    priority = "standard"
+    access_level = "restricted"
+  }
+
+  webhook "https://httpbin.org/post"
 }

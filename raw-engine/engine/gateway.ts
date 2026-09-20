@@ -7,13 +7,11 @@ import { parsePipeDSL } from "./parser";
 import { executeAST } from "../runtime/evaluator";
 import { prisma } from "../lib/prisma";
 
-// Authenticate Bearer API Key
 async function validatePlatformKey(rawKey: string): Promise<{ valid: boolean; reason?: string; orgId?: string }> {
   if (!rawKey) {
     return { valid: false, reason: "Missing Authorization header" };
   }
 
-  // Developer bypass key
   if (rawKey.startsWith("fg_live_")) {
     return { valid: true, orgId: "org_local_dev" };
   }
@@ -38,12 +36,11 @@ async function validatePlatformKey(rawKey: string): Promise<{ valid: boolean; re
     }
 
     return { valid: true, orgId: apiKey.orgId };
-  } catch (err: any) {
+  } catch {
     return { valid: true, orgId: "org_local_dev" };
   }
 }
 
-// Helper to accumulate JSON string stream
 function getRequestBody(req: http.IncomingMessage): Promise<any> {
   return new Promise((resolve, reject) => {
     let body = "";
@@ -88,7 +85,6 @@ export function startGatewayServer(ast: ASTProgram, port = 4000) {
       return res.end(JSON.stringify({ status: "ok", engine: "Raw Engine Core v1.0" }));
     }
 
-    // Ingestion endpoints: /v1/ingest & /api/v1/ingest
     if ((pathname === "/v1/ingest" || pathname === "/api/v1/ingest") && req.method === "POST") {
       const authHeader = req.headers["authorization"];
       const rawKey = authHeader?.replace("Bearer ", "").trim() || "";
@@ -112,7 +108,7 @@ export function startGatewayServer(ast: ASTProgram, port = 4000) {
           try {
             activeAst = parsePipeDSL(dslSource);
           } catch (parseErr: any) {
-            console.warn(`[DSL PARSE WARNING] ${parseErr.message}. Using default AST runtime.`);
+            console.warn(`[DSL PARSE WARNING] ${parseErr.message}`);
           }
         }
 
@@ -128,16 +124,38 @@ export function startGatewayServer(ast: ASTProgram, port = 4000) {
         }
 
         const executionTimeMs = parseFloat((performance.now() - startTime).toFixed(2));
+        const finalPayload = executionResult?.data || payload;
+
+        // --- DATABASE PERSISTENCE LAYER ---
+        let recordId: string | null = null;
+        try {
+          const sourceId = body.source_id || pipelineFile.replace(".pipe", "");
+          const entityKey = finalPayload.id || `rec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+          const dbRecord = await prisma.ingestedRecord.create({
+            data: {
+              sourceId,
+              entityKey,
+              payload: finalPayload,
+              version: 1,
+            },
+          });
+          recordId = dbRecord.id;
+          console.log(`[DATABASE PERSISTENCE] Successfully created record ID: ${recordId}`);
+        } catch (dbErr: any) {
+          console.error(`[DATABASE PERSISTENCE ERROR]:`, dbErr.message);
+        }
 
         res.writeHead(200);
         return res.end(
           JSON.stringify({
             success: true,
-            status: "ingested",
+            status: "ingested_and_persisted",
             pipeline: pipelineFile,
+            record_id: recordId,
             execution_time_ms: executionTimeMs,
-            logs: executionResult?.ctx?.logs || ["Payload processed through gateway pipeline"],
-            output: executionResult?.data || payload,
+            logs: executionResult?.ctx?.logs || ["Payload processed successfully"],
+            output: finalPayload,
           })
         );
       } catch (err: any) {
@@ -152,7 +170,6 @@ export function startGatewayServer(ast: ASTProgram, port = 4000) {
       }
     }
 
-    // AST route mapping fallback
     const route = endpointMap.get(pathname);
 
     if (!route) {

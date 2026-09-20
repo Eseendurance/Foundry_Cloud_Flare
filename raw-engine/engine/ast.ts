@@ -12,14 +12,20 @@ export interface EndpointNode extends ASTNode {
 export interface TransformRuleNode extends ASTNode {
   type: "TransformRuleNode";
   targetField: string;
-  expression: string; // e.g. "uppercase(name)", "now()", "payload.age + 1"
+  expression: string;
 }
 
 export interface ConditionNode extends ASTNode {
   type: "ConditionNode";
-  condition: string; // e.g. "role == 'admin'"
+  condition: string; // e.g. "user_role == 'admin'" or "role == 'ADMIN'"
   thenBranch: TransformRuleNode[];
   elseBranch?: TransformRuleNode[];
+}
+
+export interface WebhookNode extends ASTNode {
+  type: "WebhookNode";
+  url: string;
+  method?: string;
 }
 
 export interface PipelineNode extends ASTNode {
@@ -27,6 +33,7 @@ export interface PipelineNode extends ASTNode {
   name: string;
   transforms: TransformRuleNode[];
   conditions: ConditionNode[];
+  webhooks: WebhookNode[];
 }
 
 export interface ASTProgram {
