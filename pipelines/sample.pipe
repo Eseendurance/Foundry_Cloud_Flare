@@ -1,0 +1,13 @@
+endpoint POST "/v1/ingest" {
+  requiresKey: true
+}
+
+pipeline "sample.pipe" {
+  transform {
+    status = "processed"
+    processed_at = now()
+    user_name = uppercase(name)
+    user_role = lowercase(role)
+    system_origin = "raw_engine_gateway"
+  }
+}
