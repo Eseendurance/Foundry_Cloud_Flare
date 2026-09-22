@@ -84,7 +84,7 @@ export default function WorkflowsPage() {
       setExecutionResult(data);
     } catch (err) {
       console.error("Workflow Execution Error", err);
-    } fontally {
+    } finally {
       setExecuting(false);
     }
   }
