@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 
     const apiKey = await prisma.apiKey.create({
       data: {
-        name: name || "Default Application Key",
+        name: name || "Production Platform Key",
         keyHash: rawKey,
         keyPrefix: keyPrefix,
         orgId: "org_local_dev",

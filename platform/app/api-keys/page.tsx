@@ -6,7 +6,6 @@ interface ApiKeyRecord {
   id: string;
   name: string;
   keyPrefix: string;
-  rawKey?: string;
   status: string;
   createdAt: string;
 }
@@ -65,16 +64,16 @@ export default function ApiKeysPage() {
         </p>
       </div>
 
-      {/* API Key Generation Form */}
+      {/* API Key Generation Card */}
       <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <h2 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">Generate New API Key</h2>
+        <h2 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">Generate New Production Key</h2>
         <form onSubmit={handleCreateKey} className="flex gap-4">
           <input
             type="text"
-            placeholder="Key Description (e.g. Production Ingestion Gateway)"
+            placeholder="Key Name (e.g. Production Webhook Relay)"
             value={keyName}
             onChange={(e) => setKeyName(e.target.value)}
-            className="flex-1 px-4 py-2 border rounded-lg border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+            className="flex-1 px-4 py-2 border rounded-lg border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
             required
           />
           <button
@@ -89,7 +88,7 @@ export default function ApiKeysPage() {
         {newlyGeneratedKey && (
           <div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-lg">
             <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-300">
-              Save your secret API key! It will not be shown again:
+              Secret API Key Generated! Copy it now, as it won't be shown again:
             </p>
             <div className="mt-2 p-3 bg-white dark:bg-slate-900 font-mono text-emerald-600 dark:text-emerald-400 border rounded flex justify-between items-center select-all">
               <span>{newlyGeneratedKey}</span>
@@ -104,18 +103,18 @@ export default function ApiKeysPage() {
         )}
       </div>
 
-      {/* Key Listing Table */}
+      {/* Keys Table */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-200 dark:border-slate-800">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Active Platform Keys</h2>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Active Platform Credentials</h2>
         </div>
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 text-xs uppercase font-medium">
-              <th className="p-4">Name</th>
+              <th className="p-4">Key Name</th>
               <th className="p-4">Prefix</th>
               <th className="p-4">Status</th>
-              <th className="p-4">Created</th>
+              <th className="p-4">Created Date</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-sm">
@@ -134,7 +133,7 @@ export default function ApiKeysPage() {
             {keys.length === 0 && (
               <tr>
                 <td colSpan={4} className="p-8 text-center text-slate-500">
-                  No active API keys found. Generate one above to access the Raw Engine API.
+                  No active keys found. Generate your first API key above.
                 </td>
               </tr>
             )}

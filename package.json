@@ -1,10 +1,10 @@
 {
-  "dependencies": {
-    "@prisma/client": "^6.19.3",
-    "@xyflow/react": "^12.11.6",
-    "lucide-react": "^1.41.0"
-  },
-  "devDependencies": {
-    "prisma": "^6.19.3"
+  "name": "foundry-cloud",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev --prefix platform",
+    "engine": "npx tsx bin/engine.ts",
+    "build": "npm run build --prefix platform"
   }
 }
