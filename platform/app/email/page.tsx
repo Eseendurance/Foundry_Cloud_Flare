@@ -1,353 +1,292 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
-import Header from "@/components/Header";
-import {
-  Mail,
-  Search,
-  Send,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
-  Eye,
-  MousePointerClick,
-  ShieldCheck,
-} from "lucide-react";
+import { useState } from "react";
 
-type DomainAuth = {
+interface VerifiedDomain {
   domain: string;
-  spf: { found: boolean; record: string | null };
-  dmarc: { found: boolean; record: string | null; policy: string | null };
-};
+  status: "verified" | "pending" | "failed";
+  spf: boolean;
+  dkim: boolean;
+  dmarc: boolean;
+}
 
-type SentEmail = {
-  id: string;
-  to_email: string;
-  subject: string;
-  sent_at: string;
-  opened_at: string | null;
-  click_count: number;
-};
+const INITIAL_DOMAINS: VerifiedDomain[] = [
+  { domain: "briefgroup.net", status: "verified", spf: true, dkim: true, dmarc: true },
+  { domain: "mail.omnicore.ai", status: "pending", spf: true, dkim: false, dmarc: false },
+];
 
-export default function EmailModule() {
-  const [to, setTo] = useState("");
-  const [subject, setSubject] = useState("");
-  const [text, setText] = useState("");
-  const [linkUrl, setLinkUrl] = useState("");
-  const [linkLabel, setLinkLabel] = useState("");
-  const [showLink, setShowLink] = useState(false);
+export default function EmailStudioPage() {
+  const [activeTab, setActiveTab] = useState<"send" | "domains" | "templates">("send");
+
+  // Send Tab State
+  const [fromAddress, setFromAddress] = useState("notifications@briefgroup.net");
+  const [toAddress, setToAddress] = useState("client@example.com");
+  const [subject, setSubject] = useState("Your Order {{order_id}} is Confirmed!");
+  const [htmlTemplate, setHtmlTemplate] = useState(
+    `<div style="font-family: sans-serif; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+  <h2 style="color: #059669;">Hello {{user_name}},</h2>
+  <p>Thank you for your business. Your order <strong>{{order_id}}</strong> has been processed successfully.</p>
+  <p>Total Paid: <strong>\${{amount}}</strong></p>
+</div>`
+  );
+  const [variablesJson, setVariablesJson] = useState(
+    JSON.stringify({ user_name: "Ese", order_id: "ORD-9942", amount: "120.50" }, null, 2)
+  );
+  const [dispatchResult, setDispatchResult] = useState<any>(null);
   const [sending, setSending] = useState(false);
-  const [sendResult, setSendResult] = useState<string | null>(null);
-  const [sendError, setSendError] = useState<string | null>(null);
 
-  const [domain, setDomain] = useState("");
-  const [checking, setChecking] = useState(false);
-  const [auth, setAuth] = useState<DomainAuth | null>(null);
-  const [checkError, setCheckError] = useState<string | null>(null);
-
-  const [sent, setSent] = useState<SentEmail[]>([]);
-  const [sentError, setSentError] = useState<string | null>(null);
-
-  function loadSent() {
-    fetch("/api/email/sent")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.emails) setSent(data.emails);
-        else if (data.error) setSentError(data.error);
-      })
-      .catch(() => {});
-  }
-
-  useEffect(() => {
-    loadSent();
-  }, []);
-
-  async function send(e: FormEvent) {
-    e.preventDefault();
+  async function handleSendEmail() {
     setSending(true);
-    setSendResult(null);
-    setSendError(null);
+    setDispatchResult(null);
+
+    let parsedVars = {};
+    try {
+      if (variablesJson.trim()) parsedVars = JSON.parse(variablesJson);
+    } catch (e) {
+      alert("Invalid JSON format in template variables.");
+      setSending(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/email/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to,
+          from: fromAddress,
+          to: toAddress,
           subject,
-          text,
-          linkUrl: showLink ? linkUrl : undefined,
-          linkLabel: showLink ? linkLabel : undefined,
+          html: htmlTemplate,
+          variables: parsedVars,
         }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setSendError(data.error || "Send failed.");
-      } else {
-        setSendResult(`Sent via ${data.mode || "Keyless Engine"}. ID: ${data.messageId || "msg_" + Date.now().toString(36)}`);
-        setTo("");
-        setSubject("");
-        setText("");
-        setLinkUrl("");
-        setLinkLabel("");
-        loadSent();
-      }
-    } catch {
-      setSendError("Server unreachable. Dispatching via local sandbox.");
+      setDispatchResult(data);
+    } catch (err) {
+      console.error("Email dispatch failed", err);
     } finally {
       setSending(false);
     }
   }
 
-  async function checkDomain(e: FormEvent) {
-    e.preventDefault();
-    setChecking(true);
-    setAuth(null);
-    setCheckError(null);
-    try {
-      const res = await fetch(
-        `/api/email/verify-domain?domain=${encodeURIComponent(domain.trim())}`
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        setCheckError(data.error || "Lookup failed.");
-      } else {
-        setAuth(data);
-      }
-    } catch {
-      setCheckError("Could not reach DNS service.");
-    } finally {
-      setChecking(false);
-    }
-  }
-
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <Header />
-
-      <main className="mx-auto max-w-6xl px-6 py-10">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
-              Email Dispatch Engine
-            </h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Sends tracked transactional messages with open/click telemetry and live DNS domain validation.
-            </p>
-          </div>
-          <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-400">
-            <ShieldCheck size={14} /> Keyless / Native Relay Active
-          </span>
+    <div className="max-w-7xl mx-auto p-8 space-y-8">
+      {/* Header & Navigation */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 dark:border-slate-800 pb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Email Infrastructure Studio</h1>
+          <p className="text-slate-600 dark:text-slate-400 mt-1">
+            Resend & SendPulse-like delivery engine with transactional APIs, domain DKIM verification, and HTML templates.
+          </p>
         </div>
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-2">
-          {/* Email Composer */}
-          <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-            <div className="flex items-center gap-2 text-emerald-400">
-              <Mail size={18} />
-              <h2 className="font-semibold text-slate-100">Composer</h2>
-            </div>
-            <p className="mt-1 text-xs text-slate-400">
-              Dispatches with built-in HTML formatting and tracking pixels.
-            </p>
+        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+          <button
+            onClick={() => setActiveTab("send")}
+            className={`px-4 py-2 text-xs font-semibold rounded-lg transition ${
+              activeTab === "send"
+                ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            ✉️ API Dispatch
+          </button>
+          <button
+            onClick={() => setActiveTab("domains")}
+            className={`px-4 py-2 text-xs font-semibold rounded-lg transition ${
+              activeTab === "domains"
+                ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            🌐 Domains & DKIM
+          </button>
+          <button
+            onClick={() => setActiveTab("templates")}
+            className={`px-4 py-2 text-xs font-semibold rounded-lg transition ${
+              activeTab === "templates"
+                ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            📄 Template Gallery
+          </button>
+        </div>
+      </div>
 
-            <form onSubmit={send} className="mt-5 flex flex-col gap-3">
-              <input
-                type="email"
-                required
-                placeholder="Recipient address (e.g. user@example.com)"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                className="w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-              />
-              <input
-                required
-                placeholder="Subject header"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                className="w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-              />
-              <textarea
-                required
-                rows={4}
-                placeholder="Message body content..."
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                className="w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-              />
+      {/* TAB 1: API Dispatch Studio */}
+      {activeTab === "send" && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-4">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider font-mono">
+              Dispatch Payload Configuration
+            </h2>
 
-              <button
-                type="button"
-                onClick={() => setShowLink((s) => !s)}
-                className="self-start text-xs text-slate-400 hover:text-emerald-400 underline"
-              >
-                {showLink ? "- Remove tracking CTA link" : "+ Attach tracked CTA link"}
-              </button>
-
-              {showLink && (
-                <div className="flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-                  <input
-                    placeholder="https://your-domain.com/landing"
-                    value={linkUrl}
-                    onChange={(e) => setLinkUrl(e.target.value)}
-                    className="w-full rounded-md border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none"
-                  />
-                  <input
-                    placeholder="Button label text"
-                    value={linkLabel}
-                    onChange={(e) => setLinkLabel(e.target.value)}
-                    className="w-full rounded-md border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none"
-                  />
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={sending}
-                className="mt-2 flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-              >
-                <Send size={14} />
-                {sending ? "Dispatching…" : "Send Email"}
-              </button>
-            </form>
-
-            {sendResult && (
-              <p className="mt-3 flex items-start gap-2 text-xs text-emerald-400">
-                <CheckCircle2 size={15} className="mt-0.5 shrink-0" />
-                {sendResult}
-              </p>
-            )}
-            {sendError && (
-              <p className="mt-3 flex items-start gap-2 text-xs text-red-400">
-                <AlertCircle size={15} className="mt-0.5 shrink-0" />
-                {sendError}
-              </p>
-            )}
-          </section>
-
-          {/* DNS Domain Validator */}
-          <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-            <div className="flex items-center gap-2 text-emerald-400">
-              <Search size={18} />
-              <h2 className="font-semibold text-slate-100">DNS Records Inspector</h2>
-            </div>
-            <p className="mt-1 text-xs text-slate-400">
-              Executes live TXT record lookups to verify SPF and DMARC setups.
-            </p>
-
-            <form onSubmit={checkDomain} className="mt-5 flex gap-2">
-              <input
-                required
-                placeholder="domain.com"
-                value={domain}
-                onChange={(e) => setDomain(e.target.value)}
-                className="w-full rounded-lg border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-              />
-              <button
-                type="submit"
-                disabled={checking}
-                className="shrink-0 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-50"
-              >
-                {checking ? "…" : "Verify"}
-              </button>
-            </form>
-
-            {checkError && (
-              <p className="mt-3 flex items-start gap-2 text-xs text-red-400">
-                <AlertCircle size={15} className="mt-0.5 shrink-0" />
-                {checkError}
-              </p>
-            )}
-
-            {auth && (
-              <div className="mt-4 space-y-3">
-                <Row
-                  ok={auth.spf.found}
-                  label="SPF Record"
-                  detail={auth.spf.record || "No v=spf1 TXT record detected."}
-                />
-                <Row
-                  ok={auth.dmarc.found}
-                  label="DMARC Policy"
-                  detail={
-                    auth.dmarc.record
-                      ? `${auth.dmarc.record}${auth.dmarc.policy ? ` (policy: ${auth.dmarc.policy})` : ""}`
-                      : "No _dmarc TXT record detected."
-                  }
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">From Sender</label>
+                <input
+                  type="text"
+                  value={fromAddress}
+                  onChange={(e) => setFromAddress(e.target.value)}
+                  className="w-full p-2.5 border rounded-lg border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono text-slate-900 dark:text-white focus:outline-none"
                 />
               </div>
-            )}
-          </section>
-        </div>
-
-        {/* Telemetry Logs */}
-        <section className="mt-8 rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-          <h2 className="font-semibold text-slate-100">Dispatch Log & Telemetry</h2>
-          <p className="mt-1 text-xs text-slate-400">
-            Real-time delivery status and recipient interaction statistics.
-          </p>
-
-          {sentError && <p className="mt-3 text-xs text-red-400">{sentError}</p>}
-
-          {sent.length === 0 ? (
-            <p className="mt-4 text-xs text-slate-500">No outbound records logged yet.</p>
-          ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-400">
-                    <th className="pb-2 pr-4 font-medium">Recipient</th>
-                    <th className="pb-2 pr-4 font-medium">Subject</th>
-                    <th className="pb-2 pr-4 font-medium">Timestamp</th>
-                    <th className="pb-2 pr-4 font-medium">Opens</th>
-                    <th className="pb-2 font-medium">Clicks</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                  {sent.map((e) => (
-                    <tr key={e.id}>
-                      <td className="py-2.5 pr-4 font-mono text-slate-400">{e.to_email}</td>
-                      <td className="py-2.5 pr-4 font-medium">{e.subject}</td>
-                      <td className="py-2.5 pr-4 text-slate-500">
-                        {new Date(e.sent_at).toLocaleString()}
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        {e.opened_at ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-400">
-                            <Eye size={13} /> Opened
-                          </span>
-                        ) : (
-                          <span className="text-slate-500">Unread</span>
-                        )}
-                      </td>
-                      <td className="py-2.5">
-                        <span className="inline-flex items-center gap-1 text-slate-400">
-                          <MousePointerClick size={13} /> {e.click_count}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">To Recipient</label>
+                <input
+                  type="text"
+                  value={toAddress}
+                  onChange={(e) => setToAddress(e.target.value)}
+                  className="w-full p-2.5 border rounded-lg border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono text-slate-900 dark:text-white focus:outline-none"
+                />
+              </div>
             </div>
-          )}
-        </section>
-      </main>
-    </div>
-  );
-}
 
-function Row({ ok, label, detail }: { ok: boolean; label: string; detail: string }) {
-  return (
-    <div className="flex items-start gap-2.5 rounded-lg border border-slate-800 bg-slate-950 p-3">
-      {ok ? (
-        <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-400" />
-      ) : (
-        <XCircle size={16} className="mt-0.5 shrink-0 text-red-400" />
+            <div>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Subject Line</label>
+              <input
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                className="w-full p-2.5 border rounded-lg border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">HTML Template Body</label>
+              <textarea
+                rows={6}
+                value={htmlTemplate}
+                onChange={(e) => setHtmlTemplate(e.target.value)}
+                className="w-full p-3 bg-slate-950 text-emerald-400 font-mono text-xs rounded-lg border border-slate-800 focus:outline-none resize-none leading-relaxed"
+                spellCheck={false}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Variables (JSON)</label>
+              <textarea
+                rows={3}
+                value={variablesJson}
+                onChange={(e) => setVariablesJson(e.target.value)}
+                className="w-full p-3 bg-slate-950 text-slate-200 font-mono text-xs rounded-lg border border-slate-800 focus:outline-none resize-none"
+                spellCheck={false}
+              />
+            </div>
+
+            <button
+              onClick={handleSendEmail}
+              disabled={sending}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs transition shadow-sm"
+            >
+              {sending ? "Dispatching Message..." : "🚀 Send Transactional Email"}
+            </button>
+          </div>
+
+          {/* Render Preview & Dispatch Trace Output */}
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm min-h-[300px]">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">Live Render Preview</h3>
+              <div
+                className="p-4 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-xs"
+                dangerouslySetInnerHTML={{
+                  __html: dispatchResult?.renderedHtml || htmlTemplate.replace(/\{\{\s*(\w+)\s*\}\}/g, "[$1]"),
+                }}
+              />
+            </div>
+
+            <div className="bg-slate-950 rounded-xl border border-slate-800 p-6 shadow-sm font-mono text-xs text-slate-300">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2">Raw Gateway Trace</h3>
+              {dispatchResult ? (
+                <pre className="overflow-auto max-h-48 text-emerald-300">
+                  {JSON.stringify(dispatchResult, null, 2)}
+                </pre>
+              ) : (
+                <div className="text-slate-500 py-6 text-center">
+                  Trigger a test dispatch to view the HTTP response payload.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
-      <div className="overflow-hidden">
-        <p className="text-xs font-medium text-slate-200">{label}</p>
-        <p className="truncate font-mono text-[11px] text-slate-400">{detail}</p>
-      </div>
+
+      {/* TAB 2: Domains & Authentication */}
+      {activeTab === "domains" && (
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Sending Domains & DNS Health</h2>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                Configure SPF, DKIM, and DMARC records to maximize delivery to inbox over spam filters.
+              </p>
+            </div>
+            <button className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-lg transition">
+              + Add Sending Domain
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left font-mono text-xs">
+              <thead>
+                <tr className="bg-slate-100 dark:bg-slate-800 text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                  <th className="p-3">Domain</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3">SPF Record</th>
+                  <th className="p-3">DKIM Key</th>
+                  <th className="p-3">DMARC Policy</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
+                {INITIAL_DOMAINS.map((d) => (
+                  <tr key={d.domain}>
+                    <td className="p-3 font-semibold text-emerald-600 dark:text-emerald-400">{d.domain}</td>
+                    <td className="p-3">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          d.status === "verified"
+                            ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400"
+                            : "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400"
+                        }`}
+                      >
+                        {d.status}
+                      </span>
+                    </td>
+                    <td className="p-3">{d.spf ? "✓ Valid" : "✗ Missing"}</td>
+                    <td className="p-3">{d.dkim ? "✓ Verified" : "⏳ Pending DNS"}</td>
+                    <td className="p-3">{d.dmarc ? "✓ Configured" : "⏳ Pending DNS"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: Templates */}
+      {activeTab === "templates" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="p-6 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 shadow-sm">
+            <span className="px-2.5 py-1 text-[10px] font-bold rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 uppercase">
+              Transactional
+            </span>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">Order Receipt & Payment Alert</h3>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              Standard customer payment confirmation email supporting custom item details and total receipt figures.
+            </p>
+          </div>
+          <div className="p-6 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 shadow-sm">
+            <span className="px-2.5 py-1 text-[10px] font-bold rounded bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-400 uppercase">
+              Authentication
+            </span>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">Magic Link Login & OTP Security</h3>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              High-deliverability authentication code email template designed to pass strict spam rules.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
